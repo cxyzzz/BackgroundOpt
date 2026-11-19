@@ -5,6 +5,9 @@ on:
     branches: [ hyperos4-adapt ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,9 +43,27 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleRelease --stacktrace --no-daemon
 
-      - name: Upload APK
+      # 保留 workflow 期间的临时产物（便于在 Actions 页面直接下载/排查）
+      - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: bgopt-hyperos4-release
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      # 构建产物发布到 GitHub Releases（每次构建一个独立 Release，标记为预发布）
+      - name: Publish to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: BackgroundOpt HyperOS4 build ${{ github.run_number }}
+          body: |
+            ## 自动构建产物
+            - Commit: `${{ github.sha }}`
+            - 分支: `${{ github.ref_name }}`
+            - 构建号: #${{ github.run_number }}
+            - 触发方式: `${{ github.event_name }}`
+          files: app/build/outputs/apk/release/*.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
