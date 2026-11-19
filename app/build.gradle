@@ -95,6 +95,9 @@ android {
             minifyEnabled true
             shrinkResources true
 
+            // release 未配置正式签名，这里复用 debug keystore 显式签名，保证 CI 产物可安装
+            signingConfig signingConfigs.debug
+
             versionNameSuffix generateSuffix()
 
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules2.pro', 'proguard-log.pro'
