@@ -40,8 +40,6 @@
 -dontpreverify
 # 有了verbose这句话，混淆后就会生成映射文件
 -verbose
-#apk 包内所有 class 的内部结构
--dump class_files.txt
 #未混淆的类和成员
 -printseeds seeds.txt
 #列出从 apk 中删除的代码
