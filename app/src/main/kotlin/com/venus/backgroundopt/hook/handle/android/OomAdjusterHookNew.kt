@@ -165,30 +165,35 @@ class OomAdjusterHookNew(
                 logger.warn("OomAdjuster.mProcessList 获取失败", t)
             }
 
-            try {
-                mConstants = instance.getObjectFieldValue(
-                    fieldName = FieldConstants.mConstants
-                )
-            } catch (t: Throwable) {
-                logger.warn("OomAdjuster.mConstants 获取失败", t)
-            }
+            // HyperOS 4 / psc 布局下，mConstants/mService 字段已改名/移除，
+            // 且这些字段只服务于 updateAndTrimProcessLSP（psc 布局下已禁用），
+            // 因此 psc 布局下跳过获取，避免 NoSuchFieldError 刷屏。
+            if (!SystemUtils.isPscLayout) {
+                try {
+                    mConstants = instance.getObjectFieldValue(
+                        fieldName = FieldConstants.mConstants
+                    )
+                } catch (t: Throwable) {
+                    logger.warn("OomAdjuster.mConstants 获取失败", t)
+                }
 
-            try {
-                lruList = mProcessList?.callMethod(
-                    methodName = MethodConstants.getLruProcessesLOSP
-                ) as? List<*>
-            } catch (t: Throwable) {
-                logger.warn("OomAdjuster.getLruProcessesLOSP 调用失败", t)
-            }
+                try {
+                    lruList = mProcessList?.callMethod(
+                        methodName = MethodConstants.getLruProcessesLOSP
+                    ) as? List<*>
+                } catch (t: Throwable) {
+                    logger.warn("OomAdjuster.getLruProcessesLOSP 调用失败", t)
+                }
 
-            try {
-                mAppProfiler = instance.getObjectFieldValue(
-                    fieldName = FieldConstants.mService
-                )?.getObjectFieldValue(
-                    fieldName = FieldConstants.mAppProfiler
-                )
-            } catch (t: Throwable) {
-                logger.warn("OomAdjuster.mAppProfiler 获取失败", t)
+                try {
+                    mAppProfiler = instance.getObjectFieldValue(
+                        fieldName = FieldConstants.mService
+                    )?.getObjectFieldValue(
+                        fieldName = FieldConstants.mAppProfiler
+                    )
+                } catch (t: Throwable) {
+                    logger.warn("OomAdjuster.mAppProfiler 获取失败", t)
+                }
             }
         }
 
