@@ -17,7 +17,6 @@
 
 package com.venus.backgroundopt.hook.handle.android.function
 
-import android.app.role.RoleManager
 import android.content.ContentResolver
 import com.venus.backgroundopt.annotation.FunctionHook
 import com.venus.backgroundopt.core.RunningInfo
@@ -27,9 +26,7 @@ import com.venus.backgroundopt.hook.constants.MethodConstants
 import com.venus.backgroundopt.hook.handle.android.entity.Settings
 import com.venus.backgroundopt.manager.application.DefaultApplicationManager
 import com.venus.backgroundopt.utils.afterHook
-import com.venus.backgroundopt.utils.beforeHook
 import com.venus.backgroundopt.utils.concurrent.newThreadTask
-import de.robv.android.xposed.XC_MethodHook
 
 /**
  * @author XingC
@@ -41,58 +38,9 @@ class DefaultApplicationChangeHook(
     runningInfo: RunningInfo?
 ) : IHook(classLoader, runningInfo) {
     override fun hook() {
-        ClassConstants.RoleControllerManager.beforeHook(
-            classLoader = classLoader,
-            methodName = MethodConstants.onAddRoleHolder,
-            paramTypes = arrayOf(
-                String::class.java,             /* roleName */
-                String::class.java,             /* packageName */
-                Int::class.java,                /* flags */
-                ClassConstants.RemoteCallback   /* callback */
-            )
-        ) { param ->
-            val roleName = param.args[0] as String
-            newThreadTask {
-                when (roleName) {
-                    RoleManager.ROLE_HOME -> {
-                        handleOnAddRoleHolder(param = param) { _, packageName, _, _ ->
-                            runningInfo.setDefaultPackageName(
-                                DefaultApplicationManager.DEFAULT_APP_HOME,
-                                packageName
-                            )
-                        }
-                    }
-
-                    RoleManager.ROLE_BROWSER -> {
-                        handleOnAddRoleHolder(param = param) { _, packageName, _, _ ->
-                            runningInfo.setDefaultPackageName(
-                                DefaultApplicationManager.DEFAULT_APP_BROWSER,
-                                packageName
-                            )
-                        }
-                    }
-
-                    RoleManager.ROLE_SMS -> {
-                        handleOnAddRoleHolder(param = param) { _, packageName, _, _ ->
-                            runningInfo.setDefaultPackageName(
-                                DefaultApplicationManager.DEFAULT_APP_SMS,
-                                packageName
-                            )
-                        }
-                    }
-
-                    RoleManager.ROLE_DIALER -> {
-                        handleOnAddRoleHolder(param = param) { _, packageName, _, _ ->
-                            runningInfo.setDefaultPackageName(
-                                DefaultApplicationManager.DEFAULT_APP_DIALER,
-                                packageName
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
+        // HyperOS 4 / Android 15+ 已删除 android.app.role.RoleControllerManager
+        // (由 RoleFrameworkInitializer / system_server 的 RoleService 接管)，
+        // 此处不再 hook onAddRoleHolder，避免 ClassNotFoundError。
         ClassConstants.Settings_Secure.afterHook(
             classLoader = classLoader,
             methodName = MethodConstants.putStringForUser,
@@ -127,14 +75,4 @@ class DefaultApplicationChangeHook(
         }
     }
 
-    private inline fun handleOnAddRoleHolder(
-        param: XC_MethodHook.MethodHookParam,
-        block: (String, String, Int, Any?) -> Unit
-    ) {
-        val roleName = param.args[0] as String
-        val packageName = param.args[1] as String
-        val flags = param.args[2] as Int
-        val callback = param.args[3]
-        block(roleName, packageName, flags, callback)
-    }
 }
