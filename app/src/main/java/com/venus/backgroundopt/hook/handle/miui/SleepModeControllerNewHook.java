@@ -45,7 +45,7 @@ public class SleepModeControllerNewHook extends MethodHook {
                         new HookAction[]{
                                 new DoNotingHookAction()
                         }
-                )
+                ).setHookAllMatchedMethod(true)
         };
     }
 
