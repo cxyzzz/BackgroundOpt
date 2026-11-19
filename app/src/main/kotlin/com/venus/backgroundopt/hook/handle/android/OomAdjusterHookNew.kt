@@ -89,6 +89,8 @@ class OomAdjusterHookNew(
     @Volatile
     private var hasOomAdjReasonField: Boolean = SystemUtils.isUOrHigher
 
+    // 说明: 此方法服务于 updateAndTrimProcessLSP 里的 applyOomAdjLSP 调用（仅供旧布局）；
+    // HyperOS 4 (psc 布局) 下 updateAndTrimProcessLSP 的 replaceHook 已禁用，因此此字段不会被调用。
     private val applyOomAdjLSPMethod by lazy {
         if (hasOomAdjReasonField) {
             { processRecord: Any, now: Long, nowElapsed: Long, oomAdjReason: Any? ->
@@ -218,6 +220,8 @@ class OomAdjusterHookNew(
             updateAndTrimProcessLSP(it)
         }
 
+        // 说明: assignCachedAdjIfNecessary 在 Android 14+ 已被删除/重构（psc 布局下类里没有此方法），
+        // enable=false 时不会安装 hook（不会报错）；此处仅在 A13 及以下 + 启用分级缓存时生效。
         oomAdjusterClassName.replaceHook(
             enable = !SystemUtils.isUOrHigher && Features.USE_TIERED_CACHED_ADJ == true,
             classLoader = classLoader,

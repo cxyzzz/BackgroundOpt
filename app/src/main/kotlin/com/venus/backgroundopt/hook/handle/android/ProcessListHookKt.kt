@@ -321,6 +321,9 @@ class ProcessListHookKt(
 
     override fun getHookPoint(): Array<HookPoint> {
         return arrayOf(
+            // 说明: HyperOS 4 / Android 17 实测 setOomAdj 已不再被框架调用（改走 applyOomAdjLSP），
+            // 此 HookPoint 在 HyperOS 4 上「能装上但不触发」；保留它是为了兼容 A12-A13 等旧 ROM
+            // （旧 ROM 的核心保活依赖 setOomAdj -> handleSetOomAdjLocked -> writeLmkd 这条路径）。
             HookPoint(
                 ClassConstants.ProcessList,
                 MethodConstants.setOomAdj,
