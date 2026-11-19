@@ -79,6 +79,10 @@ class AppCompactManager2(
             return
         }
 
+        // 覆盖前先取消上一次尚未开始的压缩任务。
+        // cancel(false)：若旧任务还在 10s 延迟队列里则取消它（避免堆积）；若旧任务已在执行则
+        // 不中断（避免压缩打一半被打断），因此不会出现「压缩一半被取消」。
+        compactProcessMap.remove(processRecord)?.cancel(false)
         compactProcessMap[processRecord] = executor.schedule({
             runCatchThrowable(catchBlock = {
                 logger.error("压缩进程任务出错", it)
