@@ -265,39 +265,27 @@ class ProcessListHookKt(
         val isNegativeMode = oomMode == OomWorkModePref.MODE_NEGATIVE
         val adjWillSet = if (isNegativeMode) curAdj else curRawAdj
 
-        val finalApplyAdj = autoApplyAdjHandleAction(
-            adjHandleActionType = process.adjHandleActionType,
+        val finalApplyAdj = computeFinalApplyAdj(
+            process = process,
+            appInfo = appInfo,
+            appGroupEnum = appGroupEnum,
             adj = curAdj,
             adjWillSet = adjWillSet,
-            isUserSpaceAdj = adjWillSet >= 0,
             isNegativeMode = isNegativeMode,
-            isHighPriorityProcess = process.isHighPriorityProcess(),
+            isUserSpaceAdj = adjWillSet >= 0,
             mainProcess = process.mainProcess,
-            process = process,
-            appGroupEnum = appGroupEnum,
-            adjHandleFunction = appInfo.adjHandleFunction,
-            shouldHandleAdj = appInfo.shouldHandleAdj(),
             globalOomScorePolicy = globalOomScorePolicy,
         )
 
-        process.oomAdjScore = adjWillSet
-
-        // 与原有 setOomAdj 路径保持一致: 这里同样要驱动「内存回收 / 内存压缩」。
-        // 否则 UI 上「待压缩进程列表」的“上次执行结果”永远是空的。
         try {
-            if (appGroupEnum == AppGroupEnum.NONE && process.mainProcess) {
-                runningInfo.handleActivityEventChangeLocked(
-                    ActivityManagerServiceHookKt.ACTIVITY_STOPPED,
-                    null,
-                    appInfo
-                )
-            }
-
-            runningInfo.processManager.compactProcess(
-                process,
-                adjLastSet,
-                adjWillSet,
-                OomAdjustLevel.NONE
+            recordAdjAndDriveTrim(
+                process = process,
+                appInfo = appInfo,
+                appGroupEnum = appGroupEnum,
+                adjWillSet = adjWillSet,
+                adjLastSet = adjLastSet,
+                mainProcess = process.mainProcess,
+                oomAdjustLevel = OomAdjustLevel.NONE,
             )
         } catch (t: Throwable) {
             logger.warn("内存压缩/回收驱动失败", t)
@@ -306,6 +294,58 @@ class ProcessListHookKt(
         if (finalApplyAdj != curAdj) {
             state.curAdj = finalApplyAdj
         }
+    }
+
+    /**
+     * 计算最终要应用给进程的 adj（封装 autoApplyAdjHandleAction 的参数构造）。
+     * 纯计算：写 curAdj / writeLmkd 由调用方决定。
+     */
+    private fun computeFinalApplyAdj(
+        process: ProcessRecord,
+        appInfo: AppInfo,
+        appGroupEnum: AppGroupEnum,
+        adj: Int,
+        adjWillSet: Int,
+        isNegativeMode: Boolean,
+        isUserSpaceAdj: Boolean,
+        mainProcess: Boolean,
+        globalOomScorePolicy: GlobalOomScorePolicy,
+    ): Int = autoApplyAdjHandleAction(
+        adjHandleActionType = process.adjHandleActionType,
+        adj = adj,
+        adjWillSet = adjWillSet,
+        isUserSpaceAdj = isUserSpaceAdj,
+        isNegativeMode = isNegativeMode,
+        isHighPriorityProcess = process.isHighPriorityProcess(),
+        mainProcess = mainProcess,
+        process = process,
+        appGroupEnum = appGroupEnum,
+        adjHandleFunction = appInfo.adjHandleFunction,
+        shouldHandleAdj = appInfo.shouldHandleAdj(),
+        globalOomScorePolicy = globalOomScorePolicy,
+    )
+
+    /**
+     * 记录本次系统计算的 adj，并驱动内存回收 / 内存压缩。
+     * handleActivityEventChangeLocked 仅在「NONE + 主进程」时触发。
+     * 异常处理（是否 try/catch）由调用方决定。
+     */
+    private fun recordAdjAndDriveTrim(
+        process: ProcessRecord,
+        appInfo: AppInfo,
+        appGroupEnum: AppGroupEnum,
+        adjWillSet: Int,
+        adjLastSet: Int,
+        mainProcess: Boolean,
+        oomAdjustLevel: Int,
+    ) {
+        process.oomAdjScore = adjWillSet
+        if (appGroupEnum == AppGroupEnum.NONE && mainProcess) {
+            runningInfo.handleActivityEventChangeLocked(
+                ActivityManagerServiceHookKt.ACTIVITY_STOPPED, null, appInfo
+            )
+        }
+        runningInfo.processManager.compactProcess(process, adjLastSet, adjWillSet, oomAdjustLevel)
     }
 
     override fun getHookPoint(): Array<HookPoint> {
@@ -579,7 +619,7 @@ class ProcessListHookKt(
     ) {
         val mainProcess = process.mainProcess
         val adjLastSet = process.oomAdjScore
-        var oomAdjustLevel = OomAdjustLevel.NONE
+        val oomAdjustLevel = OomAdjustLevel.NONE
 
         val oomMode = HookCommonProperties.oomWorkModePref.oomMode
         val isNegativeMode = oomMode == OomWorkModePref.MODE_NEGATIVE
@@ -588,62 +628,31 @@ class ProcessListHookKt(
         } else {
             process.processStateRecord.curRawAdj
         }
-
-        val isHighPriorityProcess = process.isHighPriorityProcess()/*.ifTrue {
-            oomAdjustLevel = OomAdjustLevel.FIRST
-        }*/
         val isUserSpaceAdj = adjWillSet >= 0
 
-        val adjHandleFunction = appInfo.adjHandleFunction
-        val shouldHandleAdj = appInfo.shouldHandleAdj()
-        val adjHandleActionType = process.adjHandleActionType
         addAdjComputeAndApplyAction(process) {
-            val finalApplyAdj: Int = autoApplyAdjHandleAction(
-                adjHandleActionType = adjHandleActionType,
+            val finalApplyAdj = computeFinalApplyAdj(
+                process = process,
+                appInfo = appInfo,
+                appGroupEnum = appGroupEnum,
                 adj = adj,
                 adjWillSet = adjWillSet,
-                isUserSpaceAdj = isUserSpaceAdj,
                 isNegativeMode = isNegativeMode,
-                isHighPriorityProcess = isHighPriorityProcess,
+                isUserSpaceAdj = isUserSpaceAdj,
                 mainProcess = mainProcess,
-                process = process,
-                appGroupEnum = appGroupEnum,
-                adjHandleFunction = adjHandleFunction,
-                shouldHandleAdj = shouldHandleAdj,
-                globalOomScorePolicy = globalOomScorePolicy
+                globalOomScorePolicy = globalOomScorePolicy,
             )
-
-            applyFinalAdjUseCachedByteBuffer(
-                pid = pid,
-                uid = uid,
-                adj = finalApplyAdj
-            )
+            applyFinalAdjUseCachedByteBuffer(pid = pid, uid = uid, adj = finalApplyAdj)
         }
 
-        // 记录本次系统计算的分数
-        process.oomAdjScore = adjWillSet
-
-        // ProcessListHookKt.handleHandleProcessStartedLocked 执行后, 生成进程所属的appInfo
-        // 但并没有将其设置内存分组。若在进程创建时就设置appInfo的内存分组, 则在某些场景下会产生额外消耗。
-        // 例如, 在打开新app时, 会首先创建进程, 紧接着显示界面。分别会执行: ①ProcessListHookKt.handleHandleProcessStartedLocked
-        // ② ActivityManagerServiceHookKt.handleUpdateActivityUsageStats。
-        // 此时, 若在①中设置了分组, 在②中会再次设置。即: 新打开app需要连续两次appInfo的内存分组迁移, 这是不必要的。
-        // 我们的目标是保活以及额外处理, 那么只需在①中将其放入running.runningApps, 在设置oom时就可以被管理。
-        // 此时那些没有打开过页面的app就可以被设置内存分组, 相应的进行内存优化处理。
-        if (appGroupEnum == AppGroupEnum.NONE && mainProcess) {
-            runningInfo.handleActivityEventChangeLocked(
-                ActivityManagerServiceHookKt.ACTIVITY_STOPPED,
-                null,
-                appInfo
-            )
-        }
-
-        // 内存压缩
-        runningInfo.processManager.compactProcess(
-            process,
-            adjLastSet,
-            adjWillSet,
-            oomAdjustLevel
+        recordAdjAndDriveTrim(
+            process = process,
+            appInfo = appInfo,
+            appGroupEnum = appGroupEnum,
+            adjWillSet = adjWillSet,
+            adjLastSet = adjLastSet,
+            mainProcess = mainProcess,
+            oomAdjustLevel = oomAdjustLevel,
         )
     }
 
