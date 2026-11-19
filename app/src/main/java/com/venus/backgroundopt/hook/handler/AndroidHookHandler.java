@@ -37,7 +37,6 @@ import com.venus.backgroundopt.hook.handle.android.PackageManagerServiceHookKt;
 import com.venus.backgroundopt.hook.handle.android.PackageManagerServiceHookNew;
 import com.venus.backgroundopt.hook.handle.android.PhantomProcessListHook;
 import com.venus.backgroundopt.hook.handle.android.PowerManagerServiceHook;
-import com.venus.backgroundopt.hook.handle.android.OomAdjProbeHook;
 import com.venus.backgroundopt.hook.handle.android.ProcessListHookKt;
 import com.venus.backgroundopt.hook.handle.android.ProcessListHookNew;
 import com.venus.backgroundopt.hook.handle.android.ProcessRecordHook;
@@ -125,7 +124,8 @@ public class AndroidHookHandler extends PackageHook {
         safeHook("WindowProcessControllerHook", () -> new WindowProcessControllerHook(classLoader, runningInfo));
         safeHook("DefaultApplicationChangeHook", () -> new DefaultApplicationChangeHook(classLoader, runningInfo));
         safeHook("CleanUpRemovedTaskHook", () -> new CleanUpRemovedTaskHook(classLoader, runningInfo));
-        safeHook("OomAdjProbeHook", () -> new OomAdjProbeHook(classLoader, runningInfo));
+        // OomAdjProbeHook 是 HyperOS 4 适配期的调用链探针，定位完成后已移除，
+        // 否则它会高频写 /data/system/bglog/module.log 导致日志刷屏。
     }
 
     /**
