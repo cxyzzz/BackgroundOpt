@@ -11,8 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      apks: ${{ steps.collect.outputs.apks }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,12 +43,13 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleRelease --stacktrace --no-daemon
 
-      - name: Collect APK files
-        id: collect
-        run: |
-          cd app/build/outputs/apk/release
-          apks=$(ls *.apk | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "apks=$apks" >> $GITHUB_OUTPUT
+      # 保留 workflow 期间的临时产物（便于在 Actions 页面直接下载/排查）
+      - name: Upload APK (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bgopt-hyperos4-release
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
       # 构建产物发布到 GitHub Releases（每次构建一个独立 Release，标记为预发布）
       - name: Publish to Releases
@@ -68,31 +67,3 @@ jobs:
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 暂存构建产物，供下方 matrix job 逐个下载后单独上传成一个个 artifact
-      - name: Stash built APKs (for per-file artifact upload)
-        uses: actions/upload-artifact@v4
-        with:
-          name: _apks-stash
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 1
-
-  # 每个 apk 单独一个 artifact（一个一个文件，而不是打包成一个 zip）
-  upload-apk-artifacts:
-    needs: build
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        apk: ${{ fromJSON(needs.build.outputs.apks) }}
-    steps:
-      - name: Download built APKs
-        uses: actions/download-artifact@v4
-        with:
-          name: _apks-stash
-
-      - name: Upload ${{ matrix.apk }} as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.apk }}
-          path: ${{ matrix.apk }}
