@@ -2,7 +2,7 @@ name: build-apk
 
 on:
   push:
-    branches: [ hyperos4-adapt ]
+    branches: [ master ]
   workflow_dispatch:
     inputs:
       branch:
