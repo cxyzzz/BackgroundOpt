@@ -305,19 +305,8 @@ class ProcessListHookKt(
 
         if (finalApplyAdj != curAdj) {
             state.curAdj = finalApplyAdj
-
-            val nowMs = System.currentTimeMillis()
-            if (nowMs - lastApplyOomAdjLogTime > 3000) {
-                lastApplyOomAdjLogTime = nowMs
-                com.venus.backgroundopt.utils.BgDebugLog.log(
-                    "接管adj: pkg=${process.packageName} pid=$pid system=$curAdj -> module=$finalApplyAdj"
-                )
-            }
         }
     }
-
-    @Volatile
-    private var lastApplyOomAdjLogTime: Long = 0L
 
     override fun getHookPoint(): Array<HookPoint> {
         return arrayOf(
@@ -466,15 +455,6 @@ class ProcessListHookKt(
         }
     }
 
-    @Volatile
-    private var lastSetOomAdjLogTime: Long = 0L
-
-    @Volatile
-    private var lastApplyLogTime: Long = 0L
-
-    @Volatile
-    private var lastApplyLogTime2: Long = 0L
-
     private val adjHandleActionPool = Executors.newFixedThreadPool(3)
     private fun addAdjHandleAction(block: () -> Unit) {
         adjHandleActionPool.execute {
@@ -540,15 +520,6 @@ class ProcessListHookKt(
 
     private fun handleSetOomAdj(param: MethodHookParam) {
         val pid = param.args[0] as Int
-        // HyperOS4 适配期诊断: 确认 setOomAdj hook 是否真的被框架调用(限流输出)
-        val nowMs = System.currentTimeMillis()
-        if (nowMs - lastSetOomAdjLogTime > 3000) {
-            lastSetOomAdjLogTime = nowMs
-            com.venus.backgroundopt.utils.BgDebugLog.log(
-                "setOomAdj called: pid=$pid uid=${param.args[1]} adj=${param.args[2]}" +
-                    " hasRecord=${runningInfo.getRunningProcess(pid) != null}"
-            )
-        }
         // 获取当前进程对象
         val process = runningInfo.getRunningProcess(pid) ?: return
         val appInfo = process.appInfo
@@ -652,16 +623,6 @@ class ProcessListHookKt(
         // 记录本次系统计算的分数
         process.oomAdjScore = adjWillSet
 
-        // HyperOS4 适配期诊断(限流)
-        val nowApply = System.currentTimeMillis()
-        if (nowApply - lastApplyLogTime > 3000) {
-            lastApplyLogTime = nowApply
-            com.venus.backgroundopt.utils.BgDebugLog.log(
-                "adj computed: pkg=${process.packageName} pid=$pid adjWillSet=$adjWillSet" +
-                    " main=$mainProcess type=$adjHandleActionType group=$appGroupEnum"
-            )
-        }
-
         // ProcessListHookKt.handleHandleProcessStartedLocked 执行后, 生成进程所属的appInfo
         // 但并没有将其设置内存分组。若在进程创建时就设置appInfo的内存分组, 则在某些场景下会产生额外消耗。
         // 例如, 在打开新app时, 会首先创建进程, 紧接着显示界面。分别会执行: ①ProcessListHookKt.handleHandleProcessStartedLocked
@@ -720,15 +681,8 @@ class ProcessListHookKt(
         try {
             val threadLocal = AdjComputeAndApplyActionPoolThreadFactory.threadLocalMap[Thread.currentThread()]!!
             val byteBuffer = threadLocal.get()!!
-            val ok = ProcessList.writeLmkd(byteBuffer, pid, uid, adj)
+            ProcessList.writeLmkd(byteBuffer, pid, uid, adj)
             byteBuffer.clear()
-            val nowMs2 = System.currentTimeMillis()
-            if (nowMs2 - lastApplyLogTime2 > 3000) {
-                lastApplyLogTime2 = nowMs2
-                com.venus.backgroundopt.utils.BgDebugLog.log(
-                    "writeLmkd pid=$pid uid=$uid adj=$adj result=$ok"
-                )
-            }
         } catch (t: Throwable) {
             com.venus.backgroundopt.utils.BgDebugLog.log("applyFinalAdj FAILED pid=$pid adj=$adj", t)
         }
