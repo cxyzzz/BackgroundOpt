@@ -111,14 +111,19 @@ public class LoggerFactoryBaseXposedLog {
 
         @Override
         public boolean debug(String msg) {
-            log("D", msg);
+            // release 构建(DEBUG=false)下不输出 debug 日志，避免高频 hook 点刷屏
+            if (BuildConfig.DEBUG) {
+                log("D", msg);
+            }
 
             return true;
         }
 
         @Override
         public boolean debug(String msg, Throwable throwable) {
-            logThrowable("D", msg, throwable);
+            if (BuildConfig.DEBUG) {
+                logThrowable("D", msg, throwable);
+            }
 
             return true;
         }
